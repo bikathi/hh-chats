@@ -10,4 +10,14 @@
   .connect-button {
     @apply bg-blue-500 p-2 border-none hover:bg-blue-700 disabled:bg-gray-500;
   }
+
+  .message-box {
+    @apply h-9 w-[80%] rounded-full outline-none border-[1px] border-black/50
+    p-2;
+  }
+}
+
+.action-button {
+  @apply w-10 h-10 rounded-full border-[1px] border-black/50 hover:bg-gray-200 inline-flex
+  items-center justify-center;
 }
