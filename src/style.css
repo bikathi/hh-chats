@@ -1,3 +1,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .input-style {
+    @apply border-[1px] p-2 h-14 outline-none text-xl focus:border-blue-500;
+  }
+
+  .connect-button {
+    @apply bg-blue-500 p-2 border-none hover:bg-blue-700 disabled:bg-gray-500;
+  }
+}
