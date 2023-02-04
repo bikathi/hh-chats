@@ -15,31 +15,71 @@
 -->
 
 <script lang="js">
-import { inject, ref } from 'vue'
+import { inject, ref, computed } from 'vue'
+import SockJS from "sockjs-client/dist/sockjs"
+import Stomp from "webstomp-client"
+
+let socket;
+let stompClient;
 
 export default {
     name: "ChatComp",
     setup: function() {
         // receive injected user details
         const userDetails = inject("providedDetails");
+        
         const message = ref("");
         const recipientId = ref("");
         const receivedMessages = ref([]);
 
         function sendMessage() {
+            if(message.value !== "" && recipientId.value !== "") {
+                console.log(`Sending message: ${ message.value } to: ${ recipientId.value }`);
 
+                stompClient.send(
+                    `/app/p2pmessage/${ recipientId.value }`, 
+                    JSON.stringify({ message: message.value }),
+                    {}
+                );
+            }
         }
 
         function uploadMedia() {
 
         }
 
+        const processedMessages = computed(() => {
+            return receivedMessages.value;
+        });
+
+        function connectWebSocket() {
+            socket = new SockJS("http://localhost:8080/ws-entry");
+            stompClient = Stomp.over(socket);
+            stompClient.connect(
+                {
+                    username: userDetails.userName,
+                    userid: userDetails.userId
+                },
+                (frame) => {
+                    console.log("Frame: " + frame);
+                    stompClient.subscribe("/user/queue/messages", (message) => {
+                        receivedMessages.value.push(message.body);
+                    });
+                },
+                (error) => {
+                    console.log(`An error occured: ${ error }`);
+                }
+            )
+        }
+
         return {
-            userDetails, sendMessage, uploadMedia, message, receivedMessages, recipientId
+            userDetails, sendMessage, uploadMedia, message, receivedMessages, recipientId, connectWebSocket,
+            processedMessages
         }
     },
     mounted: function() {
         alert("Refreshing the page destroys all your data");
+        this.connectWebSocket();
     }
 }
 </script>
@@ -65,7 +105,11 @@ export default {
                     v-model="recipientId" />
             </div>
             <div class="h-[80%] w-full overflow-y-scroll max-h-[90%]">
-
+                <div
+                    v-for="(message, index) in processedMessages" :key="index"
+                    class="bg-red-500 h-8">
+                    {{  message  }}
+                </div>
             </div>
             <div class="h-[10%] w-full flex justify-around items-center px-2">
                 <input 
@@ -77,7 +121,8 @@ export default {
                 <div class="w-[20%] flex justify-center space-x-2">
                     <button 
                         class="action-button"
-                        @click="sendMessage">
+                        @click="sendMessage"
+                        :disabled="message === '' || recipientId === '' ">
                         <img 
                             src="src/assets/send_message.svg" 
                             alt="send-message"
