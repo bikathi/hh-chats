@@ -15,129 +15,114 @@
 -->
 
 <script lang="js">
-import { inject, ref, computed } from 'vue'
-import SockJS from "sockjs-client/dist/sockjs"
-import Stomp from "webstomp-client"
+	import { inject, ref, computed } from 'vue'
+	import SockJS from "sockjs-client/dist/sockjs"
+	import Stomp from "webstomp-client"
 
-let socket;
-let stompClient;
+	let socket;
+	let stompClient;
 
-export default {
-    name: "ChatComp",
-    setup: function() {
-        // receive injected user details
-        const userDetails = inject("providedDetails");
-        
-        const message = ref("");
-        const recipientId = ref("");
-        const receivedMessages = ref([]);
+	export default {
+	    name: "ChatComp",
+	    setup: function() {
+	        // receive injected user details
+	        const userDetails = inject("providedDetails");
 
-        function sendMessage() {
-            if(message.value !== "" && recipientId.value !== "") {
-                console.log(`Sending message: ${ message.value } to: ${ recipientId.value }`);
+	        const message = ref("");
+	        const recipientId = ref("");
+	        const receivedMessages = ref([]);
 
-                stompClient.send(
-                    `/app/p2pmessage/${ recipientId.value }`, 
-                    JSON.stringify({ message: message.value }),
-                    {}
-                );
-            }
-        }
+	        function sendMessage() {
+	            if(message.value !== "" && recipientId.value !== "") {
+	                stompClient.send(
+	                    `/app/private`,
+	                    JSON.stringify({ message: message.value, fromUserId: userDetails.userId, toUserId: recipientId.value, dateSent: new Date().toDateString() }),
+	                    {}
+	                );
 
-        function uploadMedia() {
+					receivedMessages.value.push({ message: message.value, fromUserId: userDetails.userId, toUserId: recipientId.value, dateSent: new Date().toDateString() });
+					message.value = "";
+	            }
+	        }
 
-        }
+	        function connectWebSocket() {
+	            socket = new SockJS("http://localhost:9101/ws-registry");
+	            stompClient = Stomp.over(socket);
+	            stompClient.connect(
+	                (frame) => {
+	                    console.log("Frame: " + frame);
+	                       // TODO: confirm later on whether this is /user/queue/messages
+	                    stompClient.subscribe(`/user/queue/user-${userDetails.userId}`, (message) => {
+	                        receivedMessages.value.push(JSON.parse(message.body));
+	                    });
+	                },
+	                (error) => {
+	                    console.log(`An error occured: ${ error }`);
+						stompClient.subscribe(`/queue/user-${userDetails.userId}`, (message) => {
+							console.log(`Received message from: ${ message.body }`);
+	                        receivedMessages.value.push(JSON.parse(message.body));
+	                    });
+	                }
+	            )
+	        }
 
-        const processedMessages = computed(() => {
-            return receivedMessages.value;
-        });
-
-        function connectWebSocket() {
-            socket = new SockJS("http://localhost:8080/ws-entry");
-            stompClient = Stomp.over(socket);
-            stompClient.connect(
-                {
-                    username: userDetails.userName,
-                    userid: userDetails.userId
-                },
-                (frame) => {
-                    console.log("Frame: " + frame);
-                    stompClient.subscribe("/user/queue/messages", (message) => {
-                        receivedMessages.value.push(message.body);
-                    });
-                },
-                (error) => {
-                    console.log(`An error occured: ${ error }`);
-                }
-            )
-        }
-
-        return {
-            userDetails, sendMessage, uploadMedia, message, receivedMessages, recipientId, connectWebSocket,
-            processedMessages
-        }
-    },
-    mounted: function() {
-        alert("Refreshing the page destroys all your data");
-        this.connectWebSocket();
-    }
-}
+	        return {
+	            userDetails, sendMessage, message, receivedMessages, recipientId, connectWebSocket
+	        }
+	    },
+	    mounted: function() {
+	        alert("Refreshing the page destroys all your data");
+	        this.connectWebSocket();
+	    }
+	}
 </script>
 
 <template>
-    <div class="w-full h-full p-10 flex border-[1px] space-x-2">
-        <div class="flex flex-col w-1/3 h-full rounded-md border-[1px]">
-            <div class="w-full flex flex-col items-center py-2 border-b-[1px]">
-                <h1 class="text-center">Registered As:</h1>
-                <div class="rounded-full bg-blue-400 w-20 h-20 flex justify-center items-center">
-                    <span class="text-3xl">HK</span>
-                </div>
-            </div>
-        </div>
-        <div class="flex flex-col w-2/3 h-full rounded-md border-[1px]">
-            <div class="h-[10%] w-full flex justify-center items-center space-x-2 border-b-[1px]">
-                <label for="to-user-id">Send Message To: </label>
-                <input 
-                    type="text" 
-                    id="to-user-id"
-                    class="message-box w-[50%]"
-                    placeholder="Enter id of Recipient"
-                    v-model="recipientId" />
-            </div>
-            <div class="h-[80%] w-full overflow-y-scroll max-h-[90%]">
-                <div
-                    v-for="(message, index) in processedMessages" :key="index"
-                    class="bg-red-500 h-8">
-                    {{  message  }}
-                </div>
-            </div>
-            <div class="h-[10%] w-full flex justify-around items-center px-2">
-                <input 
-                    type="text" 
-                    id="message-box" 
-                    class="message-box"
-                    placeholder="Enter Message..."
-                    v-model="message" />
-                <div class="w-[20%] flex justify-center space-x-2">
-                    <button 
-                        class="action-button"
-                        @click="sendMessage"
-                        :disabled="message === '' || recipientId === '' ">
-                        <img 
-                            src="src/assets/send_message.svg" 
-                            alt="send-message"
-                            class="w-6" />
-                    </button>
-                    <button 
-                        class="action-button"
-                        @click="uploadMedia">
-                        <img 
-                            src="src/assets/upload_media.svg" 
-                            alt="send-message"
-                            class="w-6" />
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+	<div class="w-full h-full p-10 border-[1px] space-x-2">
+		<div class="w-full h-full rounded-md border-[1px]">
+			<div
+				class="h-[10%] w-full flex justify-center items-center space-x-2 border-b-[1px]">
+				<label for="to-user-id">Send Message To: </label>
+				<input
+					type="text"
+					id="to-user-id"
+					class="message-box w-[50%]"
+					placeholder="Enter id of Recipient"
+					v-model="recipientId" />
+			</div>
+			<div
+				class="h-[80%] w-full overflow-y-scroll max-h-[90%] px-2 flex flex-col space-y-2">
+				<div
+					class="w-fit max-w-[85%] border rounded-full p-2"
+					v-for="(message, index) in receivedMessages"
+					:key="index"
+					:class="
+						message.fromUserId === userDetails.userId
+							? 'self-end bg-green-300'
+							: 'self-start bg-red-300'
+					">
+					<span>{{ message.message }}</span>
+				</div>
+			</div>
+			<div class="h-[10%] w-full flex justify-around items-center px-2">
+				<input
+					type="text"
+					id="message-box"
+					class="message-box"
+					placeholder="Enter Message..."
+					v-model="message" />
+				<div class="w-[20%] flex justify-center space-x-2">
+					<button
+						class="action-button"
+						@click="sendMessage"
+						:disabled="message === '' || recipientId === ''">
+						<img
+							src="src/assets/send_message.svg"
+							alt="send-message"
+							class="w-6" />
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
 </template>
